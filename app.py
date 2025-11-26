@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, session, jsonify
 import random
 import requests
 import csv
+import os   # ✅ AJOUTÉ
 
 app = Flask(__name__)
 app.secret_key = "un_secret_ultra_random_à_changer"
@@ -44,7 +45,6 @@ def api_words():
 
 # ------------------------------
 #   (ANCIEN CLOUD – OK DE LE LAISSER)
-#   utilisable si un jour tu veux remettre un nuage
 # ------------------------------
 
 def approx_syllables(mot: str) -> int:
@@ -110,14 +110,19 @@ def reload_words_route():
 
 
 # ------------------------------
-#   INDEX (NOUVEAU MODE MINIMAL)
+#   INDEX
 # ------------------------------
 
 @app.route("/")
 def index():
-    # plus besoin de parchment ici, on affiche juste l’éditeur
     return render_template("index.html")
 
 
+# ✅✅✅ CORRECTION RENDER ICI ✅✅✅
 if __name__ == "__main__":
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(
+        host="0.0.0.0",   # obligatoire pour Render
+        port=port,        # Render fournit le port
+        debug=False       # pas de debug en prod
+    )
