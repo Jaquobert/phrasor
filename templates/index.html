@@ -12,7 +12,7 @@
     --accent:#00ff99;
     --bg-inner:#00150d;
     --bg-outer:#000000;
-    --bubble:#78ffb4;
+    --bubble:#e8f7ff;
   }
 
   *{box-sizing:border-box;}
@@ -117,20 +117,20 @@
 
     color:var(--bubble);
     text-shadow:
-      0 0 6px rgba(0,255,140,0.45),
-      0 0 14px rgba(0,120,60,0.35),
-      0 0 32px rgba(0,80,40,0.25);
+      0 0 8px rgba(200,240,255,0.7),
+      0 0 18px rgba(120,200,255,0.55),
+      0 0 40px rgba(60,170,255,0.45);
 
     animation:matrixDrift linear infinite;
     will-change:transform, filter;
   }
 
   .bubble.selected{
-    color:#eaffff;
+    color:#f8fdff;
     text-shadow:
-      0 0 12px rgba(255,255,255,1),
-      0 0 24px rgba(0,255,170,1),
-      0 0 40px rgba(0,255,120,1);
+      0 0 14px rgba(220,245,255,1),
+      0 0 30px rgba(100,200,255,1),
+      0 0 54px rgba(60,170,255,1);
   }
 
   @keyframes matrixDrift{
@@ -248,7 +248,7 @@
     <strong>Paramètres rapides</strong>
     <label>
       Couleur du texte des bulles
-      <input type="color" id="bubbleColor" value="#78ffb4" />
+      <input type="color" id="bubbleColor" value="#e8f7ff" />
     </label>
     <label>
       Couleur du fond
@@ -292,9 +292,9 @@ function adjustColor(hex, factor){
 function bubbleShadowFromColor(hex){
   const { r, g, b } = hexToRgb(hex);
   const dim = (value, delta) => Math.max(0, value - delta);
-  const shadow1 = `0 0 6px rgba(${r},${g},${b},0.45)`;
-  const shadow2 = `0 0 14px rgba(${dim(r,60)},${dim(g,60)},${dim(b,60)},0.35)`;
-  const shadow3 = `0 0 32px rgba(${dim(r,100)},${dim(g,100)},${dim(b,100)},0.25)`;
+  const shadow1 = `0 0 8px rgba(${r},${g},${Math.min(255, b + 20)},0.70)`;
+  const shadow2 = `0 0 18px rgba(${dim(r,30)},${dim(g,40)},${dim(b,10)},0.55)`;
+  const shadow3 = `0 0 40px rgba(${dim(r,70)},${dim(g,80)},${dim(b,40)},0.45)`;
   return `${shadow1},${shadow2},${shadow3}`;
 }
 
