@@ -3,6 +3,8 @@ import random
 import requests
 import csv
 import os   # ✅ AJOUTÉ
+import smtplib
+from email.message import EmailMessage
 
 app = Flask(__name__)
 app.secret_key = "un_secret_ultra_random_à_changer"
@@ -107,6 +109,54 @@ def reload_words_route():
     global words
     words = load_words_from_google_sheet()
     return jsonify({"status": "ok"})
+
+
+# ------------------------------
+#   ENVOI EMAIL
+# ------------------------------
+
+SMTP_HOST = os.environ.get("SMTP_HOST")
+SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
+SMTP_USER = os.environ.get("SMTP_USER")
+SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD")
+SMTP_USE_TLS = os.environ.get("SMTP_USE_TLS", "true").lower() != "false"
+SMTP_FROM = os.environ.get("SMTP_FROM", SMTP_USER)
+TARGET_EMAIL = "jacques.auberger8@gmail.com"
+
+
+def send_email_via_smtp(body: str):
+    if not (SMTP_HOST and SMTP_USER and SMTP_PASSWORD and SMTP_FROM):
+        return False, "Configuration SMTP manquante sur le serveur"
+
+    msg = EmailMessage()
+    msg["Subject"] = "Phrasor – Nouveau texte"
+    msg["From"] = SMTP_FROM
+    msg["To"] = TARGET_EMAIL
+    msg.set_content(body)
+
+    try:
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+            if SMTP_USE_TLS:
+                server.starttls()
+            server.login(SMTP_USER, SMTP_PASSWORD)
+            server.send_message(msg)
+        return True, None
+    except Exception as e:
+        print("Erreur envoi email:", e)
+        return False, str(e)
+
+
+@app.route("/api/send_email", methods=["POST"])
+def api_send_email():
+    payload = request.get_json(silent=True) or {}
+    text = (payload.get("text") or "").strip()
+    if not text:
+        return jsonify({"status": "error", "message": "Texte vide"}), 400
+
+    ok, error = send_email_via_smtp(text)
+    if ok:
+        return jsonify({"status": "ok"})
+    return jsonify({"status": "error", "message": error or "Envoi impossible"}), 500
 
 
 # ------------------------------

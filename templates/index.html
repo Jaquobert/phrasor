@@ -147,7 +147,8 @@
     margin-top:6px;
   }
 
-  #copyBtn{
+  #copyBtn,
+  #sendBtn{
     border:none;
     padding:6px 14px;
     border-radius:999px;
@@ -161,10 +162,15 @@
     box-shadow:0 0 14px rgba(0,255,153,0.9);
   }
 
-  #copyBtn.copied{
+  #copyBtn.copied,
+  #sendBtn.sent{
     background:rgba(120,255,190,0.95);
     box-shadow:0 0 18px rgba(120,255,190,1);
     color:#00150d;
+  }
+
+  #sendBtn{
+    margin-left:8px;
   }
 
   #settingsToggle{
@@ -239,6 +245,7 @@
         <button id="settingsToggle" aria-expanded="false" aria-controls="settingsPanel" title="Paramètres">
           ⚙️
         </button>
+        <button id="sendBtn" onclick="sendEmail()">ENVOYER</button>
         <button id="copyBtn" onclick="copyToClipboard()">COPIER</button>
       </div>
     </div>
@@ -262,6 +269,7 @@ let shiftActive = false;
 
 const editor  = document.getElementById("editor");
 const copyBtn = document.getElementById("copyBtn");
+const sendBtn = document.getElementById("sendBtn");
 const cloud   = document.getElementById("cloud");
 const settingsToggle = document.getElementById("settingsToggle");
 const settingsPanel  = document.getElementById("settingsPanel");
@@ -546,6 +554,42 @@ function copyToClipboard(){
       copyBtn.classList.remove("copied");
       copyBtn.textContent = "COPIER";
     }, 900);
+  });
+}
+
+/* --------- EMAIL --------- */
+function resetSendButton(label = "ENVOYER"){
+  sendBtn.disabled = false;
+  sendBtn.textContent = label;
+  sendBtn.classList.remove("sent");
+}
+
+function sendEmail(){
+  const text = editor.innerText || "";
+  if(!text.trim()) return;
+
+  sendBtn.disabled = true;
+  sendBtn.textContent = "ENVOI…";
+
+  fetch("/api/send_email", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text })
+  })
+  .then(r => r.json().then(data => ({ ok: r.ok, data })))
+  .then(({ ok, data }) => {
+    if(ok && data.status === "ok"){
+      sendBtn.classList.add("sent");
+      sendBtn.textContent = "ENVOYÉ";
+      setTimeout(()=>resetSendButton(), 1200);
+    } else {
+      alert(data.message || "Envoi impossible");
+      resetSendButton("RÉESSAYER");
+    }
+  })
+  .catch(()=>{
+    alert("Erreur réseau lors de l'envoi");
+    resetSendButton("RÉESSAYER");
   });
 }
 
