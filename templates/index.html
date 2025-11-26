@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<title>PHRASOR LOGOSTROBIEN</title>
+<style>
+  :root {
+    --bg-main:#02050a;
+    --grid:rgba(0,255,120,0.08);
+    --text-main:#e4ffe9;
+    --ghost:#7CFF8F;
+    --accent:#00ff99;
+  }
+
+  *{box-sizing:border-box;}
+
+  body{
+    margin:0;
+    padding:0;
+    height:100vh;
+    background:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px),
+      radial-gradient(circle at 50% 20%, #00150d 0, #000000 60%);
+    background-size:24px 24px, 24px 24px, cover;
+    font-family:"Marcellus",system-ui,monospace;
+    color:var(--text-main);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    overflow:hidden;
+  }
+
+  #cloud{
+    position:fixed;
+    inset:0;
+    z-index:1;
+    overflow:hidden;
+    background:radial-gradient(circle at 50% 50%,rgba(0,10,6,0.96),rgba(0,0,0,1));
+    pointer-events:none;
+  }
+
+  #editorBar{
+    position:fixed;
+    bottom:32px;
+    left:50%;
+    transform:translateX(-50%);
+    width:70%;
+    max-width:1000px;
+    z-index:10;
+    background:linear-gradient(135deg,rgba(0,8,10,0.95),rgba(0,22,18,0.96));
+    border-radius:18px;
+    border:1px solid rgba(0,255,153,0.35);
+    box-shadow:
+      0 0 0 1px rgba(0,255,153,0.18),
+      0 24px 60px rgba(0,0,0,0.95);
+    padding:16px 20px 12px 20px;
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+  }
+
+  #editor{
+    min-height:110px;
+    max-height:38vh;
+    overflow-y:auto;
+    outline:none;
+    border:none;
+    background:none;
+    padding:0;
+    margin:0;
+    color:var(--text-main);
+    font-size:30px;
+    line-height:1.55;
+    text-align:left;
+    white-space:pre-wrap;
+    word-wrap:break-word;
+    caret-color:var(--ghost);
+    text-shadow:0 0 8px rgba(0,255,153,0.45);
+  }
+
+  #editor:empty::before{
+    content:"Commence à écrire… (maintiens Shift pour invoquer le phrasor)";
+    opacity:0.35;
+    font-style:italic;
+    font-size:0.8em;
+  }
+
+  .ghost{
+    color:var(--ghost);
+    opacity:0.9;
+    font-style:italic;
+    text-shadow:0 0 14px rgba(0,255,160,1);
+    animation:ghostPulse 1.4s ease-in-out infinite;
+  }
+
+  @keyframes ghostPulse{
+    0%{opacity:0.3;}
+    50%{opacity:1;}
+    100%{opacity:0.3;}
+  }
+
+  .bubble{
+    position:absolute;
+    font-family:"JetBrains Mono",Consolas,monospace;
+    letter-spacing:0.05em;
+    pointer-events:none;
+    text-transform:uppercase;
+    white-space:pre;
+    line-height:1.0;
+
+    writing-mode: vertical-lr;
+    text-orientation: upright;
+
+    color:rgba(120,255,180,1);
+    text-shadow:
+      0 0 6px rgba(0,255,140,0.45),
+      0 0 14px rgba(0,120,60,0.35),
+      0 0 32px rgba(0,80,40,0.25);
+
+    animation:matrixDrift linear infinite;
+    will-change:transform, filter;
+  }
+
+  .bubble.selected{
+    color:#eaffff;
+    text-shadow:
+      0 0 12px rgba(255,255,255,1),
+      0 0 24px rgba(0,255,170,1),
+      0 0 40px rgba(0,255,120,1);
+  }
+
+  @keyframes matrixDrift{
+    0%   { transform:translateY(125vh); }
+    100% { transform:translateY(-150vh); }
+  }
+
+  #toolbar{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    font-size:11px;
+    color:rgba(200,240,255,0.7);
+    margin-top:6px;
+  }
+
+  #copyBtn{
+    border:none;
+    padding:6px 14px;
+    border-radius:999px;
+    background:rgba(0,255,153,0.9);
+    color:#02040a;
+    font-size:11px;
+    font-weight:700;
+    letter-spacing:0.16em;
+    text-transform:uppercase;
+    cursor:pointer;
+    box-shadow:0 0 14px rgba(0,255,153,0.9);
+  }
+
+  #copyBtn.copied{
+    background:rgba(120,255,190,0.95);
+    box-shadow:0 0 18px rgba(120,255,190,1);
+    color:#00150d;
+  }
+</style>
+</head>
+<body>
+
+<div id="cloud"></div>
+
+<div id="editorBar">
+  <div id="editor" contenteditable="true"></div>
+  <div id="toolbar">
+    <div id="hints">
+      Maintiens <b>Shift</b> pour accéder au phrasor •
+      Shift + ← / → / ↑ / ↓ : parcourir • Shift + Entrée : valider le mot
+    </div>
+    <button id="copyBtn" onclick="copyToClipboard()">COPIER</button>
+  </div>
+</div>
+
+<script>
+let count = 90;
+let shiftActive = false;
+
+const editor  = document.getElementById("editor");
+const copyBtn = document.getElementById("copyBtn");
+const cloud   = document.getElementById("cloud");
+
+let bubbles = [];
+let selectable = [];
+let selectedWordIndex = 0;
+let ghostSpan = null;
+
+/* --------- CLOUD – ASYMPTOTIQUE + TAILLE /2 --------- */
+function updateCloud(){
+  fetch(`/api/cloud?n=${count}`)
+    .then(r=>r.json())
+    .then(d=>{
+      cloud.innerHTML = "";
+      bubbles = [];
+      selectable = [];
+
+      const copiesPerWord = 8;
+
+      d.cloud.forEach(word=>{
+        selectable.push(word);
+
+        for(let k=0;k<copiesPerWord;k++){
+          const el = document.createElement("div");
+          el.className = "bubble";
+          el.textContent = word;
+
+          // ✅ ASYMPTOTIQUE TRÈS FORT VERS LES PETITS
+          const z = Math.pow(Math.random(), 7);
+
+          // ✅ TAILLES GLOBALEMENT DIVISÉES PAR ~2
+          const fontSize = 5 + z * 115;      // 5px → ~120px
+          const opacity  = 0.18 + z * 0.82;  // petits bien visibles
+          const blur     = (1 - z) * 5;      // flou léger
+          const speed    = 130 - z * 95;     // loin lent, proche rapide
+
+          el.style.fontSize = fontSize + "px";
+          el.style.opacity  = opacity.toFixed(2);
+          el.style.filter   = `blur(${blur.toFixed(2)}px)`;
+          el.style.zIndex   = Math.floor(z * 1000);
+
+          const x = Math.random() * (window.innerWidth - fontSize);
+          const delay = -Math.random() * speed;
+
+          el.style.left = x + "px";
+          el.style.animationDuration = speed + "s";
+          el.style.animationDelay = delay + "s";
+
+          cloud.appendChild(el);
+          bubbles.push({ el, word });
+        }
+      });
+
+      selectedWordIndex = Math.floor(Math.random() * selectable.length);
+      updateSelection();
+    });
+}
+
+/* --------- GHOST --------- */
+function clearGhost(){
+  if(ghostSpan && ghostSpan.parentNode){
+    ghostSpan.parentNode.removeChild(ghostSpan);
+  }
+  ghostSpan = null;
+}
+
+function setGhostWord(word){
+  if(!shiftActive || !word) return;
+
+  editor.focus();
+  clearGhost();
+
+  const sel = window.getSelection();
+  const range = sel.rangeCount ? sel.getRangeAt(0) : document.createRange();
+  range.collapse(false);
+
+  ghostSpan = document.createElement("span");
+  ghostSpan.className = "ghost";
+  ghostSpan.textContent = word;
+
+  range.insertNode(ghostSpan);
+
+  const caretRange = document.createRange();
+  caretRange.setStartBefore(ghostSpan);
+  caretRange.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(caretRange);
+}
+
+function commitGhost(){
+  if(!ghostSpan) return;
+
+  const sel = window.getSelection();
+  const textNode = document.createTextNode(ghostSpan.textContent + " ");
+  ghostSpan.parentNode.replaceChild(textNode, ghostSpan);
+  ghostSpan = null;
+
+  const range = document.createRange();
+  range.setStartAfter(textNode);
+  range.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(range);
+
+  selectedWordIndex = Math.floor(Math.random() * selectable.length);
+  updateSelection();
+}
+
+/* --------- SÉLECTION --------- */
+function updateSelection(){
+  const currentWord = selectable[selectedWordIndex];
+
+  bubbles.forEach(b=>{
+    if(shiftActive && b.word === currentWord){
+      b.el.classList.add("selected");
+    } else {
+      b.el.classList.remove("selected");
+    }
+  });
+
+  if(shiftActive){
+    setGhostWord(currentWord);
+  } else {
+    clearGhost();
+  }
+}
+
+document.addEventListener("keydown", e=>{
+  if(e.key === "Shift"){
+    shiftActive = true;
+    updateSelection();
+    return;
+  }
+
+  if(shiftActive && ["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(e.key)){
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
+  if(!shiftActive) return;
+
+  switch(e.key){
+    case "ArrowRight": selectedWordIndex++; break;
+    case "ArrowLeft":  selectedWordIndex--; break;
+    case "ArrowUp":    selectedWordIndex+=5; break;
+    case "ArrowDown":  selectedWordIndex-=5; break;
+    case "Enter": e.preventDefault(); commitGhost(); return;
+  }
+
+  if(selectedWordIndex < 0) selectedWordIndex = selectable.length - 1;
+  if(selectedWordIndex >= selectable.length) selectedWordIndex = 0;
+
+  updateSelection();
+});
+
+document.addEventListener("keyup", e=>{
+  if(e.key === "Shift"){
+    shiftActive = false;
+    updateSelection();
+  }
+});
+
+/* --------- COPY --------- */
+function copyToClipboard(){
+  const text = editor.innerText || "";
+  if(!text.trim()) return;
+
+  navigator.clipboard.writeText(text).then(()=>{
+    copyBtn.classList.add("copied");
+    copyBtn.textContent = "COPIÉ";
+    setTimeout(()=>{
+      copyBtn.classList.remove("copied");
+      copyBtn.textContent = "COPIER";
+    }, 900);
+  });
+}
+
+/* --------- INIT --------- */
+updateCloud();
+editor.focus();
+</script>
+</body>
+</html>
