@@ -107,7 +107,7 @@
     position:absolute;
     font-family:"JetBrains Mono",Consolas,monospace;
     letter-spacing:0.05em;
-    pointer-events:none;
+    pointer-events:auto;
     text-transform:uppercase;
     white-space:pre;
     line-height:1.0;
@@ -345,6 +345,29 @@ function updateCloud(){
           el.style.animationDuration = speed + "s";
           el.style.animationDelay = delay + "s";
 
+          el.addEventListener("mouseenter", ()=>{
+            const idx = selectable.indexOf(word);
+            if(idx !== -1){
+              selectedWordIndex = idx;
+              updateSelection(true);
+            }
+          });
+
+          el.addEventListener("mouseleave", ()=>{
+            updateSelection(shiftActive);
+          });
+
+          el.addEventListener("click", evt=>{
+            evt.preventDefault();
+            evt.stopPropagation();
+            const idx = selectable.indexOf(word);
+            if(idx !== -1){
+              selectedWordIndex = idx;
+            }
+            updateSelection(true);
+            commitGhost(word);
+          });
+
           cloud.appendChild(el);
           bubbles.push({ el, word });
         }
@@ -363,10 +386,22 @@ function clearGhost(){
   ghostSpan = null;
 }
 
-function setGhostWord(word){
-  if(!shiftActive || !word) return;
-
+function ensureEditorSelection(){
   editor.focus();
+  const sel = window.getSelection();
+  if(sel.rangeCount === 0){
+    const range = document.createRange();
+    range.setStart(editor, editor.childNodes.length);
+    range.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+}
+
+function setGhostWord(word, force=false){
+  if(!(shiftActive || force) || !word) return;
+
+  ensureEditorSelection();
   clearGhost();
 
   const sel = window.getSelection();
@@ -386,13 +421,22 @@ function setGhostWord(word){
   sel.addRange(caretRange);
 }
 
-function commitGhost(){
-  if(!ghostSpan) return;
+function commitGhost(wordOverride=null){
+  const targetWord = wordOverride || (ghostSpan ? ghostSpan.textContent : null);
+  if(!targetWord) return;
 
+  ensureEditorSelection();
   const sel = window.getSelection();
-  const textNode = document.createTextNode(ghostSpan.textContent + " ");
-  ghostSpan.parentNode.replaceChild(textNode, ghostSpan);
-  ghostSpan = null;
+  const textNode = document.createTextNode(targetWord + " ");
+
+  if(ghostSpan && ghostSpan.parentNode){
+    ghostSpan.parentNode.replaceChild(textNode, ghostSpan);
+    ghostSpan = null;
+  } else {
+    const range = sel.rangeCount ? sel.getRangeAt(0) : document.createRange();
+    range.collapse(false);
+    range.insertNode(textNode);
+  }
 
   const range = document.createRange();
   range.setStartAfter(textNode);
@@ -405,19 +449,19 @@ function commitGhost(){
 }
 
 /* --------- SÉLECTION --------- */
-function updateSelection(){
+function updateSelection(force=false){
   const currentWord = selectable[selectedWordIndex];
 
   bubbles.forEach(b=>{
-    if(shiftActive && b.word === currentWord){
+    if((shiftActive || force) && b.word === currentWord){
       b.el.classList.add("selected");
     } else {
       b.el.classList.remove("selected");
     }
   });
 
-  if(shiftActive){
-    setGhostWord(currentWord);
+  if(shiftActive || force){
+    setGhostWord(currentWord, force);
   } else {
     clearGhost();
   }
