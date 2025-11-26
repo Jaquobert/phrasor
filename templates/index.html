@@ -107,7 +107,7 @@
     position:absolute;
     font-family:"JetBrains Mono",Consolas,monospace;
     letter-spacing:0.05em;
-    pointer-events:none;
+    pointer-events:auto;
     text-transform:uppercase;
     white-space:pre;
     line-height:1.0;
@@ -302,6 +302,15 @@ let bubbles = [];
 let selectable = [];
 let selectedWordIndex = 0;
 let ghostSpan = null;
+let lastSelectionRange = null;
+
+function storeCollapsedRange(range){
+  const clone = range.cloneRange();
+  if(!clone.collapsed){
+    clone.collapse(false);
+  }
+  lastSelectionRange = clone;
+}
 
 /* --------- CLOUD – ASYMPTOTIQUE + TAILLE /2 --------- */
 function updateCloud(){
@@ -345,6 +354,29 @@ function updateCloud(){
           el.style.animationDuration = speed + "s";
           el.style.animationDelay = delay + "s";
 
+          el.addEventListener("mouseenter", ()=>{
+            const idx = selectable.indexOf(word);
+            if(idx !== -1){
+              selectedWordIndex = idx;
+              updateSelection({ forceSelect: true, allowGhost: shiftActive });
+            }
+          });
+
+          el.addEventListener("mouseleave", ()=>{
+            updateSelection();
+          });
+
+          el.addEventListener("click", evt=>{
+            evt.preventDefault();
+            evt.stopPropagation();
+            const idx = selectable.indexOf(word);
+            if(idx !== -1){
+              selectedWordIndex = idx;
+            }
+            updateSelection({ forceSelect: true, allowGhost: shiftActive });
+            commitGhost(word);
+          });
+
           cloud.appendChild(el);
           bubbles.push({ el, word });
         }
@@ -363,10 +395,34 @@ function clearGhost(){
   ghostSpan = null;
 }
 
+function ensureEditorSelection(){
+  editor.focus({ preventScroll:true });
+  const sel = window.getSelection();
+  const selectionInsideEditor = sel.rangeCount > 0 && editor.contains(sel.anchorNode) && editor.contains(sel.focusNode);
+
+  if(selectionInsideEditor){
+    storeCollapsedRange(sel.getRangeAt(0));
+    return;
+  }
+
+  if(lastSelectionRange){
+    sel.removeAllRanges();
+    sel.addRange(lastSelectionRange.cloneRange());
+    return;
+  }
+
+  const range = document.createRange();
+  range.setStart(editor, editor.childNodes.length);
+  range.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(range);
+  storeCollapsedRange(range);
+}
+
 function setGhostWord(word){
   if(!shiftActive || !word) return;
 
-  editor.focus();
+  ensureEditorSelection();
   clearGhost();
 
   const sel = window.getSelection();
@@ -384,39 +440,51 @@ function setGhostWord(word){
   caretRange.collapse(true);
   sel.removeAllRanges();
   sel.addRange(caretRange);
+  storeCollapsedRange(caretRange);
 }
 
-function commitGhost(){
-  if(!ghostSpan) return;
+function commitGhost(wordOverride=null){
+  const targetWord = wordOverride || (ghostSpan ? ghostSpan.textContent : null);
+  if(!targetWord) return;
 
+  ensureEditorSelection();
   const sel = window.getSelection();
-  const textNode = document.createTextNode(ghostSpan.textContent + " ");
-  ghostSpan.parentNode.replaceChild(textNode, ghostSpan);
-  ghostSpan = null;
+  const textNode = document.createTextNode(targetWord + " ");
+
+  if(ghostSpan && ghostSpan.parentNode){
+    ghostSpan.parentNode.replaceChild(textNode, ghostSpan);
+    ghostSpan = null;
+  } else {
+    const range = sel.rangeCount ? sel.getRangeAt(0) : document.createRange();
+    range.collapse(false);
+    range.insertNode(textNode);
+  }
 
   const range = document.createRange();
   range.setStartAfter(textNode);
   range.collapse(true);
   sel.removeAllRanges();
   sel.addRange(range);
+  storeCollapsedRange(range);
 
   selectedWordIndex = Math.floor(Math.random() * selectable.length);
   updateSelection();
 }
 
 /* --------- SÉLECTION --------- */
-function updateSelection(){
+function updateSelection(options={}){
+  const { forceSelect = false, allowGhost = true } = options;
   const currentWord = selectable[selectedWordIndex];
 
   bubbles.forEach(b=>{
-    if(shiftActive && b.word === currentWord){
+    if((shiftActive || forceSelect) && b.word === currentWord){
       b.el.classList.add("selected");
     } else {
       b.el.classList.remove("selected");
     }
   });
 
-  if(shiftActive){
+  if(shiftActive && allowGhost){
     setGhostWord(currentWord);
   } else {
     clearGhost();
@@ -455,6 +523,14 @@ document.addEventListener("keyup", e=>{
   if(e.key === "Shift"){
     shiftActive = false;
     updateSelection();
+  }
+});
+
+document.addEventListener("selectionchange", ()=>{
+  const sel = window.getSelection();
+  if(sel.rangeCount === 0) return;
+  if(editor.contains(sel.anchorNode) && editor.contains(sel.focusNode)){
+    storeCollapsedRange(sel.getRangeAt(0));
   }
 });
 
