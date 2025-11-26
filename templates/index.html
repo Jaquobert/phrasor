@@ -10,6 +10,9 @@
     --text-main:#e4ffe9;
     --ghost:#7CFF8F;
     --accent:#00ff99;
+    --bg-inner:#00150d;
+    --bg-outer:#000000;
+    --bubble:#78ffb4;
   }
 
   *{box-sizing:border-box;}
@@ -21,7 +24,7 @@
     background:
       linear-gradient(var(--grid) 1px, transparent 1px),
       linear-gradient(90deg, var(--grid) 1px, transparent 1px),
-      radial-gradient(circle at 50% 20%, #00150d 0, #000000 60%);
+      radial-gradient(circle at 50% 20%, var(--bg-inner) 0, var(--bg-outer) 60%);
     background-size:24px 24px, 24px 24px, cover;
     font-family:"Marcellus",system-ui,monospace;
     color:var(--text-main);
@@ -112,7 +115,7 @@
     writing-mode: vertical-lr;
     text-orientation: upright;
 
-    color:rgba(120,255,180,1);
+    color:var(--bubble);
     text-shadow:
       0 0 6px rgba(0,255,140,0.45),
       0 0 14px rgba(0,120,60,0.35),
@@ -163,22 +166,95 @@
     box-shadow:0 0 18px rgba(120,255,190,1);
     color:#00150d;
   }
+
+  #settingsToggle{
+    border:none;
+    background:rgba(0,30,20,0.65);
+    color:var(--text-main);
+    padding:6px 10px;
+    border-radius:10px;
+    font-size:12px;
+    cursor:pointer;
+    margin-left:10px;
+    box-shadow:0 0 12px rgba(0,255,153,0.2);
+    transition:transform 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  #settingsToggle:hover{
+    transform:translateY(-1px);
+    box-shadow:0 0 18px rgba(0,255,153,0.35);
+  }
+
+  #settingsPanel{
+    position:fixed;
+    top:20px;
+    right:20px;
+    width:260px;
+    padding:14px 16px;
+    background:rgba(0,12,10,0.92);
+    border:1px solid rgba(0,255,153,0.25);
+    border-radius:14px;
+    box-shadow:0 20px 40px rgba(0,0,0,0.55);
+    color:var(--text-main);
+    font-size:12px;
+    display:none;
+    gap:10px;
+    z-index:20;
+  }
+
+  #settingsPanel.open{
+    display:flex;
+    flex-direction:column;
+  }
+
+  #settingsPanel label{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+  }
+
+  #settingsPanel input[type="color"]{
+    width:80px;
+    height:30px;
+    border:none;
+    background:none;
+    padding:0;
+    cursor:pointer;
+  }
 </style>
 </head>
 <body>
 
 <div id="cloud"></div>
 
-<div id="editorBar">
-  <div id="editor" contenteditable="true"></div>
-  <div id="toolbar">
-    <div id="hints">
-      Maintiens <b>Shift</b> pour accéder au phrasor •
-      Shift + ← / → / ↑ / ↓ : parcourir • Shift + Entrée : valider le mot
+  <div id="editorBar">
+    <div id="editor" contenteditable="true"></div>
+    <div id="toolbar">
+      <div id="hints">
+        Maintiens <b>Shift</b> pour accéder au phrasor •
+        Shift + ← / → / ↑ / ↓ : parcourir • Shift + Entrée : valider le mot
+      </div>
+      <div style="display:flex; align-items:center;">
+        <button id="settingsToggle" aria-expanded="false" aria-controls="settingsPanel" title="Paramètres">
+          ⚙️
+        </button>
+        <button id="copyBtn" onclick="copyToClipboard()">COPIER</button>
+      </div>
     </div>
-    <button id="copyBtn" onclick="copyToClipboard()">COPIER</button>
   </div>
-</div>
+
+  <div id="settingsPanel" aria-hidden="true">
+    <strong>Paramètres rapides</strong>
+    <label>
+      Couleur du texte des bulles
+      <input type="color" id="bubbleColor" value="#78ffb4" />
+    </label>
+    <label>
+      Couleur du fond
+      <input type="color" id="backgroundColor" value="#000000" />
+    </label>
+  </div>
 
 <script>
 let count = 90;
@@ -187,6 +263,40 @@ let shiftActive = false;
 const editor  = document.getElementById("editor");
 const copyBtn = document.getElementById("copyBtn");
 const cloud   = document.getElementById("cloud");
+const settingsToggle = document.getElementById("settingsToggle");
+const settingsPanel  = document.getElementById("settingsPanel");
+const bubbleColorInput = document.getElementById("bubbleColor");
+const backgroundColorInput = document.getElementById("backgroundColor");
+
+const rootStyle = document.documentElement.style;
+let bubbleColor = bubbleColorInput.value;
+
+function hexToRgb(hex){
+  const value = hex.replace("#","");
+  const normalized = value.length === 3 ? value.split("").map(c=>c+c).join("") : value;
+  const num = parseInt(normalized, 16);
+  return {
+    r:(num >> 16) & 255,
+    g:(num >> 8) & 255,
+    b:num & 255
+  };
+}
+
+function adjustColor(hex, factor){
+  const { r, g, b } = hexToRgb(hex);
+  const clamp = v => Math.max(0, Math.min(255, Math.round(v)));
+  return `#${[clamp(r + 255 * factor), clamp(g + 255 * factor), clamp(b + 255 * factor)]
+    .map(v=>v.toString(16).padStart(2,"0")).join("")}`;
+}
+
+function bubbleShadowFromColor(hex){
+  const { r, g, b } = hexToRgb(hex);
+  const dim = (value, delta) => Math.max(0, value - delta);
+  const shadow1 = `0 0 6px rgba(${r},${g},${b},0.45)`;
+  const shadow2 = `0 0 14px rgba(${dim(r,60)},${dim(g,60)},${dim(b,60)},0.35)`;
+  const shadow3 = `0 0 32px rgba(${dim(r,100)},${dim(g,100)},${dim(b,100)},0.25)`;
+  return `${shadow1},${shadow2},${shadow3}`;
+}
 
 let bubbles = [];
 let selectable = [];
@@ -225,6 +335,8 @@ function updateCloud(){
           el.style.opacity  = opacity.toFixed(2);
           el.style.filter   = `blur(${blur.toFixed(2)}px)`;
           el.style.zIndex   = Math.floor(z * 1000);
+          el.style.color    = bubbleColor;
+          el.style.textShadow = bubbleShadowFromColor(bubbleColor);
 
           const x = Math.random() * (window.innerWidth - fontSize);
           const delay = -Math.random() * speed;
@@ -361,7 +473,41 @@ function copyToClipboard(){
   });
 }
 
+/* --------- PARAMÈTRES --------- */
+function applyBubbleColor(hex){
+  bubbleColor = hex;
+  rootStyle.setProperty("--bubble", hex);
+  const shadow = bubbleShadowFromColor(hex);
+  bubbles.forEach(b=>{
+    b.el.style.color = hex;
+    b.el.style.textShadow = shadow;
+  });
+}
+
+function applyBackgroundColor(hex){
+  const inner = adjustColor(hex, 0.12);
+  const outer = adjustColor(hex, -0.18);
+  rootStyle.setProperty("--bg-inner", inner);
+  rootStyle.setProperty("--bg-outer", outer);
+}
+
+settingsToggle.addEventListener("click", ()=>{
+  const isOpen = settingsPanel.classList.toggle("open");
+  settingsToggle.setAttribute("aria-expanded", String(isOpen));
+  settingsPanel.setAttribute("aria-hidden", String(!isOpen));
+});
+
+bubbleColorInput.addEventListener("input", e=>{
+  applyBubbleColor(e.target.value);
+});
+
+backgroundColorInput.addEventListener("input", e=>{
+  applyBackgroundColor(e.target.value);
+});
+
 /* --------- INIT --------- */
+applyBackgroundColor(backgroundColorInput.value);
+applyBubbleColor(bubbleColorInput.value);
 updateCloud();
 editor.focus();
 </script>
