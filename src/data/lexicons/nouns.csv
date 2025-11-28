@@ -1,0 +1,6 @@
+id,lemma,gender,human,abstract,semanticClass
+n001,vent,masculine,false,true,nature
+n002,machine,feminine,false,false,object
+n003,oracle,feminine,true,false,mystic
+n004,corps,masculine,true,false,human
+n005,rêve,masculine,false,true,abstract
